@@ -1,4 +1,5 @@
 import type { UsageRecord, DataSource } from '../types'
+import { extractSessionTitles, attachSessionTitles } from './sessionTitles'
 
 let seq = 0
 const uid = () => `r${Date.now().toString(36)}-${(seq++).toString(36)}`
@@ -188,13 +189,14 @@ export function parseJSONLLine(line: string): UsageRecord | null {
   }
 }
 
-/** 解析整个 jsonl 文本 */
+/** 解析整个 jsonl 文本（附带本地会话标题识别） */
 export function parseJSONL(text: string): UsageRecord[] {
   const out: UsageRecord[] = []
   for (const line of text.split(/\r?\n/)) {
     const r = parseJSONLLine(line)
     if (r) out.push(r)
   }
+  if (out.length) attachSessionTitles(out, extractSessionTitles(text))
   return out
 }
 
@@ -320,6 +322,7 @@ export function parseCodexRollout(text: string): UsageRecord[] {
       source: 'log',
     })
   }
+  if (out.length) attachSessionTitles(out, extractSessionTitles(text))
   return out
 }
 
