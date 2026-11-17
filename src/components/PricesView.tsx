@@ -13,22 +13,40 @@ interface Props {
 
 export default function PricesView({ prices, rate, onChange, onToast }: Props) {
   const [editing, setEditing] = useState<string | null>(null)
-  const [draft, setDraft] = useState<Partial<Price>>({})
+  /** 编辑草稿存的是界面上看到的人民币值，保存时按币种反算回底层原值 */
+  const [draft, setDraft] = useState<{ input: string; output: string; cacheRead: string }>({ input: '', output: '', cacheRead: '' })
   const [rateDraft, setRateDraft] = useState(String(rate))
   const [q, setQ] = useState('')
-  const [currencyFilter, setCurrencyFilter] = useState<'all' | 'USD' | 'CNY'>('all')
+
+  // 显示层：一律换算成人民币，底层仍保留原币种（计费引擎按原币种+汇率计算，保证准确）
+  const toCNY = (v: number, cur: Price['currency']) => cur === 'USD' ? v * rate : v
+  const fromCNY = (v: number, cur: Price['currency']) => cur === 'USD' ? v / rate : v
 
   const rows = useMemo(() => Object.entries(prices)
     .filter(([k]) => k.toLowerCase().includes(q.toLowerCase()))
-    .filter(([, p]) => currencyFilter === 'all' || p.currency === currencyFilter)
-    .sort((a, b) => a[0].localeCompare(b[0])), [prices, q, currencyFilter])
+    .sort((a, b) => a[0].localeCompare(b[0])), [prices, q])
 
   function startEdit(k: string) {
-    setEditing(k); setDraft({ ...prices[k] })
+    const p = prices[k]
+    setEditing(k)
+    setDraft({
+      input: String(Number(toCNY(p.input, p.currency).toFixed(4))),
+      output: String(Number(toCNY(p.output, p.currency).toFixed(4))),
+      cacheRead: String(Number(toCNY(p.cacheRead, p.currency).toFixed(4))),
+    })
   }
   function saveEdit(k: string) {
-    const next = { ...prices, [k]: { ...prices[k], ...draft } as Price }
-    onChange(next, rate); setEditing(null); onToast(`已更新 ${k} 的单价`)
+    const p = prices[k]
+    const next = {
+      ...prices,
+      [k]: {
+        ...p,
+        input: fromCNY(Number(draft.input) || 0, p.currency),
+        output: fromCNY(Number(draft.output) || 0, p.currency),
+        cacheRead: fromCNY(Number(draft.cacheRead) || 0, p.currency),
+      } as Price,
+    }
+    onChange(next, rate); setEditing(null); onToast(`已更新 ${k} 的人民币单价`)
   }
   function saveRate() {
     const r = Number(rateDraft)
@@ -64,7 +82,7 @@ export default function PricesView({ prices, rate, onChange, onToast }: Props) {
       {/* 汇率 + 工具条 */}
       <div className="card card-pad flex flex-wrap items-end gap-3">
         <div>
-          <label className="text-xs muted block mb-1">美元汇率 1 USD = ? CNY</label>
+          <label className="text-xs muted block mb-1">美元折算汇率 1 USD = ? CNY</label>
           <div className="flex gap-2">
             <input className="input w-24" value={rateDraft} onChange={e => setRateDraft(e.target.value)} inputMode="decimal" />
             <button className="btn btn-sm whitespace-nowrap" onClick={saveRate}><Check size={13} /> 应用</button>
@@ -74,25 +92,19 @@ export default function PricesView({ prices, rate, onChange, onToast }: Props) {
           <label className="text-xs muted block mb-1">搜索模型</label>
           <input className="input" placeholder="如 gpt-5 / doubao / claude" value={q} onChange={e => setQ(e.target.value)} />
         </div>
-        <div>
-          <label className="text-xs muted block mb-1">币种</label>
-          <select className="select w-28" value={currencyFilter} onChange={e => setCurrencyFilter(e.target.value as any)}>
-            <option value="all">全部</option><option value="USD">USD</option><option value="CNY">CNY</option>
-          </select>
-        </div>
         <button className="btn btn-sm" onClick={reset}><RotateCcw size={13} /> 恢复默认</button>
       </div>
 
       {/* 价格表 */}
       <div className="card card-pad overflow-x-auto">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-bold text-sm">单价表（每百万 token）</h3>
+          <h3 className="font-bold text-sm">单价表（每百万 token，人民币）</h3>
           <span className="tag">{rows.length} 个模型</span>
         </div>
         <table className="dt">
           <thead>
             <tr>
-              <th>模型</th><th>币种</th><th>输入</th><th>输出</th><th>缓存命中</th><th>发布日期</th><th></th>
+              <th>模型</th><th>输入 ¥</th><th>输出 ¥</th><th>缓存命中 ¥</th><th>发布日期</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -102,12 +114,11 @@ export default function PricesView({ prices, rate, onChange, onToast }: Props) {
                   <div className="font-semibold">{k}</div>
                   {p.estimated && <span className="text-[10px] text-amber-600">估算·请校正</span>}
                 </td>
-                <td><span className={'tag ' + (p.currency === 'USD' ? '' : '')}>{p.currency}</span></td>
                 {editing === k ? (
                   <>
-                    <td><input className="input w-20 !py-1 text-right" value={draft.input ?? ''} onChange={e => setDraft({ ...draft, input: Number(e.target.value) })} /></td>
-                    <td><input className="input w-20 !py-1 text-right" value={draft.output ?? ''} onChange={e => setDraft({ ...draft, output: Number(e.target.value) })} /></td>
-                    <td><input className="input w-20 !py-1 text-right" value={draft.cacheRead ?? ''} onChange={e => setDraft({ ...draft, cacheRead: Number(e.target.value) })} /></td>
+                    <td><input className="input w-20 !py-1 text-right" value={draft.input} onChange={e => setDraft({ ...draft, input: e.target.value })} /></td>
+                    <td><input className="input w-20 !py-1 text-right" value={draft.output} onChange={e => setDraft({ ...draft, output: e.target.value })} /></td>
+                    <td><input className="input w-20 !py-1 text-right" value={draft.cacheRead} onChange={e => setDraft({ ...draft, cacheRead: e.target.value })} /></td>
                     <td className="text-[11px] muted mono">{p.released || '—'}</td>
                     <td>
                       <div className="flex justify-end gap-1">
@@ -118,9 +129,9 @@ export default function PricesView({ prices, rate, onChange, onToast }: Props) {
                   </>
                 ) : (
                   <>
-                    <td className="mono">{fmtMoney(p.input, p.currency)}</td>
-                    <td className="mono">{fmtMoney(p.output, p.currency)}</td>
-                    <td className="mono muted">{fmtMoney(p.cacheRead, p.currency)}</td>
+                    <td className="mono">{fmtMoney(toCNY(p.input, p.currency), 'CNY')}</td>
+                    <td className="mono">{fmtMoney(toCNY(p.output, p.currency), 'CNY')}</td>
+                    <td className="mono muted">{fmtMoney(toCNY(p.cacheRead, p.currency), 'CNY')}</td>
                     <td className="text-[11px] muted mono">{p.released || '—'}</td>
                     <td><button className="btn btn-ghost btn-sm" onClick={() => startEdit(k)}><Pencil size={13} /></button></td>
                   </>
@@ -145,6 +156,7 @@ export default function PricesView({ prices, rate, onChange, onToast }: Props) {
               <div><b className="text-amber-600">估算</b>：厂商未公开官方单价，暂用参考值，建议按实际账单校正。</div>
               <div><b className="text-green-600">免费档</b>：模型名含 free，按 0 成本计（如 hy4-free、hy4-flash-free）。</div>
               <div><b className="text-slate-500">发布日期</b>：模型官方发布日，联网核实；同系列变体沿用系列发布日。</div>
+              <div><b className="text-slate-500">汇率说明</b>：表内单价一律显示为人民币；美元计价的模型按上方汇率实时折算，汇率变动后显示会自动更新。</div>
             </div>
           </div>
           <div className="rounded-xl border border-slate-200 p-3">
