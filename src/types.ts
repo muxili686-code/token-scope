@@ -21,6 +21,8 @@ export interface UsageRecord {
   tag?: string
   /** 会话ID（用于去重统计会话数） */
   session?: string
+  /** 会话中文标题（导入时从首条提问本地识别） */
+  sessionTitle?: string
   /** 数据来源 */
   source: DataSource
 }
