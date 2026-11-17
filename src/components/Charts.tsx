@@ -1,12 +1,29 @@
 import { useMemo } from 'react'
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend,
+  Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
 } from 'recharts'
 import type { UsageRecord } from '../types'
 import { fmtDate, fmtCompact } from '../lib/format'
 
 const COLORS = ['#4f46e5', '#e0524d', '#0ea5e9', '#16a34a', '#f59e0b', '#9333ea', '#14b8a6', '#ec4899', '#6366f1', '#84cc16']
+
+/**
+ * 按名称稳定映射颜色：同一厂商/模型在任何图表、任何筛选下颜色都一致，
+ * 且同一批数据内不同名称不撞色。用模块级注册表按首次出现顺序分配，
+ * 保证跨筛选稳定（不像 hash 会撞色，也不像数组下标会随排名串色）。
+ */
+const EXT_PALETTE = [...COLORS, '#0d9488', '#db2777', '#65a30d', '#7c3aed', '#0891b2', '#c2410c', '#4f46e5', '#059669', '#a21caf', '#0284c7', '#b45309', '#4338ca', '#be123c', '#3f6212', '#6d28d9', '#0e7490', '#9a3412']
+const colorRegistry = new Map<string, string>()
+export function stableColor(name: string, palette: string[] = EXT_PALETTE): string {
+  const hit = colorRegistry.get(name)
+  if (hit) return hit
+  // 避免与已分配颜色重复：取第一个未被占用的色
+  const used = new Set(colorRegistry.values())
+  const color = palette.find(c => !used.has(c)) || palette[colorRegistry.size % palette.length]
+  colorRegistry.set(name, color)
+  return color
+}
 
 interface DailyPoint { date: string; tokens: number; cost: number; [k: string]: any }
 
@@ -60,17 +77,61 @@ export function DailyCostChart({ records, costOf }: { records: UsageRecord[]; co
   )
 }
 
-export function VendorPieChart({ data }: { data: Array<{ name: string; value: number }> }) {
+export function VendorPieChart({
+  data, tokenData,
+}: {
+  data: Array<{ name: string; value: number }>
+  tokenData?: Array<{ name: string; value: number }>
+}) {
+  // 以费用榜为主序，合并 token 榜里额外出现的厂商；占比各自按本环总量计算
+  const names = [...new Set([...data.map(d => d.name), ...(tokenData || []).map(d => d.name)])]
+  const totalCost = data.reduce((s, d) => s + d.value, 0) || 1
+  const totalTok = (tokenData || []).reduce((s, d) => s + d.value, 0) || 1
+  const rows = names.map(name => {
+    const cost = data.find(d => d.name === name)?.value || 0
+    const tok = tokenData?.find(d => d.name === name)?.value || 0
+    return { name, cost, tok, costPct: cost / totalCost * 100, tokPct: tok / totalTok * 100, color: stableColor(name) }
+  }).sort((a, b) => b.cost - a.cost)
+
   return (
-    <ResponsiveContainer width="100%" height={220}>
-      <PieChart>
-        <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={52} outerRadius={82} paddingAngle={2} stroke="none">
-          {data.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-        </Pie>
-        <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => ['¥' + Number(v).toFixed(2), '成本']} />
-        <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, color: '#5b6678' }} />
-      </PieChart>
-    </ResponsiveContainer>
+    <div>
+      <ResponsiveContainer width="100%" height={210}>
+        <PieChart>
+          {tokenData && tokenData.length > 0 && (
+            <Pie data={rows} dataKey="tok" nameKey="name" cx="50%" cy="50%" innerRadius={44} outerRadius={62} paddingAngle={2} stroke="none" isAnimationActive={false}>
+              {rows.map(r => <Cell key={'t' + r.name} fill={r.color} fillOpacity={0.45} />)}
+            </Pie>
+          )}
+          <Pie data={rows} dataKey="cost" nameKey="name" cx="50%" cy="50%"
+            innerRadius={tokenData && tokenData.length ? 68 : 52} outerRadius={tokenData && tokenData.length ? 90 : 82}
+            paddingAngle={2} stroke="none" isAnimationActive={false}>
+            {rows.map(r => <Cell key={'c' + r.name} fill={r.color} />)}
+          </Pie>
+          <Tooltip contentStyle={tooltipStyle}
+            formatter={(v: any, _n: any, item: any) => {
+              const name = item?.payload?.name || ''
+              const row = rows.find(r => r.name === name)
+              if (row && tokenData?.length) {
+                return [`费用 ¥${row.cost.toFixed(2)}（${row.costPct.toFixed(1)}%） · Token ${fmtCompact(row.tok)}（${row.tokPct.toFixed(1)}%）`, name]
+              }
+              return ['¥' + Number(v).toFixed(2), name]
+            }} />
+        </PieChart>
+      </ResponsiveContainer>
+      <div className="flex flex-wrap gap-x-3 gap-y-1 justify-center mt-1">
+        {rows.map(r => (
+          <div key={r.name} className="flex items-center gap-1.5 text-[11px] text-slate-600" title={`${r.name}：费用 ${r.costPct.toFixed(1)}% · Token ${r.tokPct.toFixed(1)}%`}>
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: r.color }} />
+            <span>{r.name}</span>
+            <span className="font-semibold text-slate-800">{r.costPct.toFixed(0)}%</span>
+            {tokenData && tokenData.length > 0 && <span className="text-slate-400">/ {r.tokPct.toFixed(0)}%</span>}
+          </div>
+        ))}
+      </div>
+      <div className="text-center text-[10px] faint mt-1.5">
+        {tokenData && tokenData.length ? '外环 费用占比 · 内环（浅）Token 占比 · 数字为 费用% / Token%' : '环图 费用占比'}
+      </div>
+    </div>
   )
 }
 
@@ -84,7 +145,7 @@ export function DailyTokenStack({ records }: { records: UsageRecord[] }) {
         <XAxis dataKey="date" tick={{ fill: '#93a0b4', fontSize: 11 }} axisLine={false} tickLine={false} />
         <YAxis tick={{ fill: '#93a0b4', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => fmtCompact(v)} />
         <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [fmtCompact(Number(v)) + ' tok', '']} />
-        {vendors.map((v, i) => <Bar key={v} dataKey={v} stackId="a" fill={COLORS[i % COLORS.length]} />)}
+        {vendors.map(v => <Bar key={v} dataKey={v} stackId="a" fill={stableColor(v)} />)}
       </BarChart>
     </ResponsiveContainer>
   )

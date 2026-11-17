@@ -14,7 +14,7 @@ export function fmtCompact(n: number): string {
   }
   if (a >= 1e4) {
     const v = n / 1e4
-    return (Math.abs(v) >= 1000 ? Math.round(v) : v.toFixed(1)) + '万'
+    return v.toFixed(2) + '万'
   }
   return fmtInt(n)
 }

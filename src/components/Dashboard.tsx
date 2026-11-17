@@ -91,6 +91,12 @@ export default function Dashboard({ records, aggs, batches, selectedIds, onSelec
     return [...map.entries()].map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
   }, [filtered, scoped])
 
+  const vendorTokens = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const r of filtered) map.set(r.vendor, (map.get(r.vendor) || 0) + (r.input + r.output + r.cacheRead + r.cacheWrite + r.reasoning))
+    return [...map.entries()].map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
+  }, [filtered])
+
   // 筛选后按模型的明细
   const scopedAggs = useMemo(() => {
     const map = new Map<string, ModelAgg>()
@@ -241,8 +247,8 @@ export default function Dashboard({ records, aggs, batches, selectedIds, onSelec
           <DailyCostChart records={filtered} costOf={scoped.costOf} />
         </div>
         <div className="card card-pad">
-          <h3 className="font-bold text-sm mb-2">厂商费用占比</h3>
-          <VendorPieChart data={vendorCost} />
+          <h3 className="font-bold text-sm mb-2">厂商费用 / Token 占比</h3>
+          <VendorPieChart data={vendorCost} tokenData={vendorTokens} />
         </div>
       </div>
 

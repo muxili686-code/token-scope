@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Search, ChevronDown, ChevronUp, Info, Activity, CalendarDays, BarChart3 } from 'lucide-react'
 import type { UsageRecord } from '../types'
 import { fmtInt, fmtCompact } from '../lib/format'
+import { stableColor } from './Charts'
 
 const tok = (r: UsageRecord) => r.input + r.output + r.cacheRead + r.cacheWrite + r.reasoning
 
@@ -273,8 +274,7 @@ export function RequestSizeDistribution({ records }: { records: UsageRecord[] })
   }
 
   const W = 460, H = 34
-  const colors = ['#93c5fd', '#fca5a5', '#fdba74', '#6ee7b7', '#c4b5fd', '#f9a8d4']
-  const stroke = ['#3b82f6', '#ef4444', '#f97316', '#10b981', '#8b5cf6', '#ec4899']
+  const [hover, setHover] = useState<{ model: string; x: number; tok: number } | null>(null)
 
   return (
     <div className="card card-pad">
@@ -286,41 +286,56 @@ export function RequestSizeDistribution({ records }: { records: UsageRecord[] })
         <div className="text-center text-xs faint py-8">没有请求数据</div>
       ) : (
         <div className="space-y-1.5">
-          {models.map((m, i) => {
+          {models.map(m => {
             const g = densityPath(m.arr, W, H)
+            const color = stableColor(m.name)
             return (
               <div key={m.name} className="flex items-center gap-3 py-1 border-b border-slate-50 last:border-0">
                 <div className="w-[130px] md:w-[160px] shrink-0 min-w-0">
-                  <div className="font-semibold text-xs truncate" title={m.name}>{m.name}</div>
+                  <div className="font-semibold text-xs truncate" title={m.name} style={{ color }}>{m.name}</div>
                   <div className="text-[10px] faint">{fmtInt(m.count)} 次</div>
                 </div>
                 <div className="w-[110px] shrink-0">
                   <div className="flex items-center gap-1.5 text-[10px]">
                     <span className="faint w-6">50%</span>
-                    <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div className="h-full rounded-full" style={{ width: `${Math.min(100, m.p50 / g.scaleMax * 100)}%`, background: stroke[i] }} /></div>
+                    <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div className="h-full rounded-full" style={{ width: `${Math.min(100, m.p50 / g.scaleMax * 100)}%`, background: color }} /></div>
                     <span className="mono w-12 text-right">{fmtCompact(m.p50)}</span>
                   </div>
                   <div className="flex items-center gap-1.5 text-[10px] mt-1">
                     <span className="faint w-6">90%</span>
-                    <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div className="h-full rounded-full opacity-60" style={{ width: `${Math.min(100, m.p90 / g.scaleMax * 100)}%`, background: stroke[i] }} /></div>
+                    <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div className="h-full rounded-full opacity-60" style={{ width: `${Math.min(100, m.p90 / g.scaleMax * 100)}%`, background: color }} /></div>
                     <span className="mono w-12 text-right">{fmtCompact(m.p90)}</span>
                   </div>
                 </div>
-                <div className="flex-1 min-w-0 overflow-hidden">
-                  <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none">
+                <div className="flex-1 min-w-0 relative">
+                  <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none"
+                    onMouseMove={e => {
+                      const rect = e.currentTarget.getBoundingClientRect()
+                      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+                      setHover({ model: m.name, x: ratio * rect.width, tok: ratio * g.scaleMax })
+                    }}
+                    onMouseLeave={() => setHover(null)}
+                    style={{ cursor: 'crosshair' }}>
                     <line x1="0" y1={H} x2={W} y2={H} stroke="#e2e8f0" strokeWidth="1" />
                     <line x1={(globalP50 / g.scaleMax) * W} y1="0" x2={(globalP50 / g.scaleMax) * W} y2={H} stroke="#94a3b8" strokeWidth="1" strokeDasharray="3 3" />
-                    <path d={g.d} fill={colors[i]} fillOpacity="0.45" stroke={stroke[i]} strokeWidth="1.2" />
-                    <line x1={g.x50} y1={H * 0.2} x2={g.x50} y2={H} stroke={stroke[i]} strokeWidth="1.5" />
-                    <circle cx={g.x90} cy={H * 0.2} r="2.5" fill="#64748b" />
+                    <path d={g.d} fill={color} fillOpacity="0.3" stroke={color} strokeWidth="1.2" />
+                    <line x1={g.x50} y1={H * 0.2} x2={g.x50} y2={H} stroke={color} strokeWidth="1.5" />
+                    <circle cx={g.x90} cy={H * 0.2} r="2.5" fill={color} />
+                    {hover?.model === m.name && <line x1={(hover.tok / g.scaleMax) * W} y1="0" x2={(hover.tok / g.scaleMax) * W} y2={H} stroke="#475569" strokeWidth="1" strokeDasharray="2 2" />}
                   </svg>
+                  {hover?.model === m.name && (
+                    <div className="absolute top-0 z-10 px-1.5 py-0.5 rounded bg-slate-900 text-white text-[10px] mono pointer-events-none whitespace-nowrap"
+                      style={{ left: `${Math.min(80, (hover.tok / g.scaleMax) * 100)}%` }}>
+                      {fmtCompact(hover.tok)} token
+                    </div>
+                  )}
                 </div>
               </div>
             )
           })}
         </div>
       )}
-      <p className="text-[10px] faint mt-3 flex items-center gap-1"><Info size={11} /> 每模型一条分布曲线（各自归一）；实线为该模型中位数，圆点为 90 分位，虚线为全局中位数 {fmtCompact(globalP50)}</p>
+      <p className="text-[10px] faint mt-3 flex items-center gap-1"><Info size={11} /> 每模型一条分布曲线（各自归一）；实线=中位数，圆点=90 分位，虚线=全局中位数 {fmtCompact(globalP50)}；鼠标悬停曲线可看对应 token 量</p>
     </div>
   )
 }
