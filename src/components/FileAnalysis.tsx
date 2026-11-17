@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import {
-  UploadCloud, FolderOpen, FileJson, Loader2, CheckCircle2, X, Trash2,
+  UploadCloud, FolderOpen, Loader2, CheckCircle2, X, Trash2,
   Coins, Zap, Activity, MessageSquare, Repeat, Percent, ArrowRight,
   Info, AlertTriangle, ShieldCheck, ChevronRight, FlaskConical,
 } from 'lucide-react'
@@ -39,7 +39,6 @@ export default function FileAnalysis({ prices, rate, batches, onData, onToast, o
   const [pasteText, setPasteText] = useState('')
   const [showPaste, setShowPaste] = useState(false)
   const [showBilling, setShowBilling] = useState(false)
-  const fileRef = useRef<HTMLInputElement>(null)
   const dirRef = useRef<HTMLInputElement>(null)
 
   function loadDemo() {
@@ -169,8 +168,6 @@ export default function FileAnalysis({ prices, rate, batches, onData, onToast, o
           {records.length > 0 && <button className="btn btn-ghost btn-sm shrink-0" onClick={clearAll}><Trash2 size={13} /> 清空</button>}
         </div>
 
-        <input ref={fileRef} type="file" multiple accept=".jsonl,.json,.csv,.tsv,.log,.txt,.zstd,.db,.sqlite,.vscdb" className="hidden"
-          onChange={e => { if (e.target.files) handleFiles(e.target.files); e.target.value = '' }} />
         <input ref={dirRef} type="file" {...{ webkitdirectory: '', directory: '' } as any} multiple className="hidden"
           onChange={e => { if (e.target.files) handleFiles(e.target.files); e.target.value = '' }} />
 
@@ -183,10 +180,7 @@ export default function FileAnalysis({ prices, rate, batches, onData, onToast, o
           <div className="font-semibold text-sm mb-1">{parsing ? '正在解析…' : '拖拽日志文件 / 整个日志目录到这里'}</div>
           <div className="text-[11px] faint mb-3">可一次拖入多个 · 自动识别模型与用量 · 完成后自动打开看板</div>
           <div className="flex items-center justify-center gap-2 flex-wrap">
-            <button className="btn btn-primary btn-sm" disabled={parsing} onClick={() => fileRef.current?.click()}>
-              <FileJson size={14} /> 选择文件
-            </button>
-            <button className="btn btn-sm" disabled={parsing} onClick={() => dirRef.current?.click()}>
+            <button className="btn btn-primary btn-sm" disabled={parsing} onClick={() => dirRef.current?.click()}>
               <FolderOpen size={14} /> 选择日志目录
             </button>
             <button className="btn btn-ghost btn-sm" onClick={() => setShowPaste(v => !v)}>
@@ -243,7 +237,7 @@ export default function FileAnalysis({ prices, rate, batches, onData, onToast, o
           <p className="muted text-sm max-w-lg mx-auto mb-4">
             在上面选择日志文件后，这里会自动识别出用了哪些模型、各消耗多少 token，并按官方价格算费用。
           </p>
-          <button className="btn btn-primary" onClick={() => fileRef.current?.click()}><UploadCloud size={15} /> 选择日志文件</button>
+          <button className="btn btn-primary" onClick={() => dirRef.current?.click()}><FolderOpen size={15} /> 选择日志目录</button>
         </div>
       )}
 
