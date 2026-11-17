@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Search, ChevronDown, ChevronUp, Info, Activity, CalendarDays, BarChart3 } from 'lucide-react'
+import { Search, ChevronDown, ChevronUp, Info, Activity, CalendarDays, BarChart3, Eye, EyeOff } from 'lucide-react'
 import type { UsageRecord } from '../types'
 import { fmtInt, fmtCompact } from '../lib/format'
 import { stableColor } from './Charts'
@@ -34,15 +34,16 @@ export function WorkspaceDistribution({ records }: { records: UsageRecord[] }) {
   const [q, setQ] = useState('')
   const [sortBy, setSortBy] = useState<'tokens' | 'sessions'>('tokens')
   const [expanded, setExpanded] = useState(false)
+  const [showTitle, setShowTitle] = useState(true) // 会话：中文标题 / 原始编码 切换
   const DEFAULT_ROWS = 5 // 默认显示行数，与右侧日分布热力图高度协调
 
   const rows = useMemo(() => {
-    const map = new Map<string, { name: string; tokens: number; sessions: Set<string>; req: number }>()
+    const map = new Map<string, { name: string; title?: string; tokens: number; sessions: Set<string>; req: number }>()
     for (const r of records) {
       const key = mode === 'session'
         ? (r.session || '未标记会话')
         : (r.tag || '未标记工作空间')
-      if (!map.has(key)) map.set(key, { name: key, tokens: 0, sessions: new Set(), req: 0 })
+      if (!map.has(key)) map.set(key, { name: key, title: r.sessionTitle, tokens: 0, sessions: new Set(), req: 0 })
       const row = map.get(key)!
       row.tokens += tok(r)
       row.req++
@@ -51,7 +52,7 @@ export function WorkspaceDistribution({ records }: { records: UsageRecord[] }) {
     const total = [...map.values()].reduce((s, r) => s + r.tokens, 0) || 1
     return [...map.values()]
       .map(r => ({ ...r, sessionsCount: r.sessions.size, share: r.tokens / total }))
-      .filter(r => r.name.toLowerCase().includes(q.toLowerCase()))
+      .filter(r => r.name.toLowerCase().includes(q.toLowerCase()) || (r.title || '').toLowerCase().includes(q.toLowerCase()))
       .sort((a, b) => sortBy === 'tokens' ? b.tokens - a.tokens : b.sessionsCount - a.sessionsCount)
       .slice(0, 20)
   }, [records, mode, q, sortBy])
@@ -92,6 +93,13 @@ export function WorkspaceDistribution({ records }: { records: UsageRecord[] }) {
           <button className={'px-3 py-1.5 text-xs font-semibold ' + (mode === 'workspace' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600')}
             onClick={() => setMode('workspace')}>按工作空间</button>
         </div>
+        {mode === 'session' && (
+          <button className="btn btn-sm flex items-center gap-1" onClick={() => setShowTitle(v => !v)}
+            title={showTitle ? '点击显示原始会话编码' : '点击显示中文标题'}>
+            {showTitle ? <Eye size={13} /> : <EyeOff size={13} />}
+            {showTitle ? '中文标题' : '原始编码'}
+          </button>
+        )}
         <div className="relative">
           <Search size={13} className="absolute left-2.5 top-2 text-slate-400" />
           <input className="input !w-40 !pl-7 !py-1.5 !text-xs" placeholder="搜索…" value={q} onChange={e => setQ(e.target.value)} />
@@ -107,12 +115,19 @@ export function WorkspaceDistribution({ records }: { records: UsageRecord[] }) {
         <div className="space-y-1">
           {(expanded ? rows : rows.slice(0, DEFAULT_ROWS)).map((row, i) => {
             const arr = activity.get(row.name) || []
+            const useTitle = mode === 'session' && showTitle && row.title
+            const label = useTitle ? row.title! : row.name
+            const subLabel = mode === 'session' && useTitle
+              ? `${row.sessionsCount} 会话 · ${fmtInt(row.req)} 次 · ${row.name.slice(0, 8)}`
+              : `${row.sessionsCount} 会话 · ${fmtInt(row.req)} 次`
             return (
               <div key={row.name} className="flex items-center gap-3 py-1.5 rounded-lg hover:bg-slate-50 px-1.5">
                 <span className="w-6 text-[11px] faint mono shrink-0">{String(i + 1).padStart(2, '0')}</span>
                 <div className="w-[150px] md:w-[210px] shrink-0 min-w-0">
-                  <div className="font-semibold text-xs truncate" title={row.name}>{row.name.length > 26 ? row.name.slice(0, 24) + '…' : row.name}</div>
-                  <div className="text-[10px] faint">{row.sessionsCount} 会话 · {fmtInt(row.req)} 次</div>
+                  <div className="font-semibold text-xs truncate" title={row.title ? `${row.title} · ${row.name}` : row.name}>
+                    {label.length > 26 ? label.slice(0, 24) + '…' : label}
+                  </div>
+                  <div className="text-[10px] faint truncate" title={subLabel}>{subLabel}</div>
                 </div>
                 <div className="w-[88px] shrink-0 text-right">
                   <div className="font-bold text-xs kpi-num">{fmtCompact(row.tokens)}</div>
