@@ -2,6 +2,15 @@
 
 一个纯前端、数据不出本机的网站：统计各 AI 模型用了多少 token，并按**官方真实单价**折算成本。用于解决参考站 `token.daeai.cn` 的两个短板：只扫 WorkBuddy 日志、单价写死导致「计费不准」。
 
+## 在线访问
+
+打开链接即可使用，无需安装；所有数据都在你自己的浏览器里解析和保存，不上传服务器。
+
+- **对外推荐（GitHub Pages）**：https://muxili686-code.github.io/token-scope/
+- **备用（WorkBuddy 应用）**：https://wbapp-r4s1uh4nui4eeoqeuzkm5e.app.workbuddy.host/?sharecode=L5BF25AG7E
+
+> 两个链接功能完全一致，内容同步更新。GitHub Pages 地址含 GitHub 账号名（平台规则，无法在站内修改）；如需去掉，可绑定自定义域名，步骤见文末「自定义域名」。
+
 ## 启动
 
 ```bash
@@ -81,6 +90,18 @@ USD 计价的模型按汇率折算成人民币后汇总（默认 1USD=6.6793CNY�
 已配置定时任务「TokenScope 每日模型价与汇率更新」，每天 08:35 联网核实上述官方价与实时汇率，自动修正/新增价格条目并重新构建，输出变更摘要。用户手动改过的单价不会被覆盖。
 
 > ⚠️ 厂商调价频繁，本表单价仅作折算基准，最终以各厂商官网实时价为准。Kimi 及个别条目为估算，请按实际账单校正。
+
+## 自定义域名
+
+GitHub Pages 项目站地址固定为 `账号名.github.io/仓库名`，账号名无法在 GitHub 内修改。想换成自己的域名（如 `app.example.com`），按下面三步：
+
+1. **注册域名**：在 Porkbun / Namecheap / 阿里云 / 腾讯云等注册一个自己能改 DNS 的域名。
+2. **加 DNS 解析**（在域名服务商后台）：
+   - 用**子域名**（推荐，如 `app.example.com`）：加一条 `CNAME` 记录，主机 `app`，值 `muxili686-code.github.io`（不含仓库名）。
+   - 用**根域名**（`example.com`）：加 4 条 `A` 记录，主机 `@`，值分别为 `185.199.108.153`、`185.199.109.153`、`185.199.110.153`、`185.199.111.153`。
+3. **GitHub 端**：仓库 Settings → Pages → Custom domain 填入域名 → Save → DNS 生效后勾选 **Enforce HTTPS**。
+
+> WorkBuddy 应用链接（`*.app.workbuddy.host`）是平台生成，不支持绑定自定义域名，也没有修改入口。要干净网址只能用上面的 GitHub Pages + 自定义域名方案。
 
 ## 技术栈
 
