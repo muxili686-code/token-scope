@@ -8,8 +8,9 @@
 
 - **对外推荐（GitHub Pages）**：https://muxili686-code.github.io/token-scope/
 - **备用（WorkBuddy 应用）**：https://wbapp-r4s1uh4nui4eeoqeuzkm5e.app.workbuddy.host/?sharecode=L5BF25AG7E
+- **GitHub 仓库（源码）**：https://github.com/muxili686-code/token-scope
 
-> 两个链接功能完全一致，内容同步更新。GitHub Pages 地址含 GitHub 账号名（平台规则，无法在站内修改）；如需去掉，可绑定自定义域名，步骤见文末「自定义域名」。
+> 两个访问链接功能完全一致，内容同步更新。GitHub Pages 地址含 GitHub 账号名（平台规则，无法在站内修改）；如需去掉，可绑定自定义域名，步骤见文末「自定义域名」。
 
 ## 启动
 
