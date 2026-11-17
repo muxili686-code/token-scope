@@ -24,9 +24,9 @@ export function exportAggsCSV(aggs: ModelAgg[], filename = 'tokenscope-模型明
 
 /** 导出逐条记录 CSV */
 export function exportRecordsCSV(records: UsageRecord[], filename = 'tokenscope-用量明细.csv') {
-  const head = ['时间', '模型', '厂商', '输入token', '输出token', '缓存命中', '缓存写入', '会话']
+  const head = ['时间', '模型', '厂商', '输入token', '输出token', '缓存命中', '缓存写入', '会话', '会话标题']
   const rows = records.map(r => [
-    new Date(r.ts).toLocaleString('zh-CN'), r.model, r.vendor, r.input, r.output, r.cacheRead, r.cacheWrite, r.session || '',
+    new Date(r.ts).toLocaleString('zh-CN'), r.model, r.vendor, r.input, r.output, r.cacheRead, r.cacheWrite, r.session || '', r.sessionTitle || '',
   ])
   const csv = '\uFEFF' + [head, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\r\n')
   download(new Blob([csv], { type: 'text/csv;charset=utf-8' }), filename)
