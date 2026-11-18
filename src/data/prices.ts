@@ -19,6 +19,8 @@ import type { Price } from '../types'
  */
 export const DEFAULT_PRICES: Record<string, Price> = {
   // ---------- OpenAI (USD / 1M) ----------
+  'gpt-6.2-astra':    { input: 8,  output: 40, cacheRead: 0.4,  currency: 'USD', source: 'OpenAI 官方发布 2026-11-18（输入$8/输出$40/缓存$0.4）', updated: '2026-11-18', released: '2026-11-18', },
+  'gpt-6.2-sol':      { input: 2,  output: 10, cacheRead: 0.1,  currency: 'USD', source: 'OpenAI 官方发布 2026-11-18（输入$2/输出$10/缓存$0.1）', updated: '2026-11-18', released: '2026-11-18', },
   'gpt-6-astra':      { input: 10, output: 50,  cacheRead: 1,    currency: 'USD', source: 'Artificial Analysis 榜单价($10/$50/命中1)', updated: '2026-11-17', released: '2026-09-03', },
   'gpt-6.1-sol':      { input: 2,  output: 10,  cacheRead: 0.1,  currency: 'USD', source: 'Artificial Analysis 榜单价($2/$10/命中0.1)', updated: '2026-11-17', released: '2026-09-29', },
   'gpt-6.1-terra':    { input: 1,  output: 5,   cacheRead: 0.05, currency: 'USD', source: 'Artificial Analysis 榜单价($1/$5/命中0.05)', updated: '2026-11-17', released: '2026-10-26', },
