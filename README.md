@@ -10,8 +10,6 @@
 - **备用（WorkBuddy 应用）**：https://wbapp-r4s1uh4nui4eeoqeuzkm5e.app.workbuddy.host/?sharecode=L5BF25AG7E
 - **GitHub 仓库（源码）**：https://github.com/muxili686-code/token-scope
 
-> 两个访问链接功能完全一致，内容同步更新。GitHub Pages 地址含 GitHub 账号名（平台规则，无法在站内修改）；如需去掉，可绑定自定义域名，步骤见文末「自定义域名」。
-
 ## 启动
 
 ```bash
@@ -62,7 +60,7 @@ npm run build      # 打包到 dist/，可静态部署
 - `.db / .sqlite / .vscdb` 数据库（Cursor / OpenCode / Qoder 桌面 / MiMoCode / ZCode / Hermes state.db）——`sql.js` WASM 在浏览器内打开，探索式扫描所有表里的 usage JSON，不依赖固定 schema
 - 上述文件直接拖入「数据接入」即可，无需命令行
 
-**仍需处理**：SQLCipher 加密库（Trae）无法解析；ChatGPT / 豆包 / Devin 等云端 App 对话不落本地 token 日志，需从网页导出账单 CSV（页面内置分平台图文向导）。
+**其他情况**：采用加密存储的本地应用数据（如 Trae）需先从应用内导出；ChatGPT / 豆包 / Devin 等云端 App 对话不落本地 token 日志，可通过页面内置的分平台图文向导导出账单 CSV 后导入。
 
 ## 三种数据来源说明
 
@@ -91,18 +89,6 @@ USD 计价的模型按汇率折算成人民币后汇总（默认 1USD=6.6793CNY�
 已配置定时任务「TokenScope 每日模型价与汇率更新」，每天 08:35 联网核实上述官方价与实时汇率，自动修正/新增价格条目并重新构建，输出变更摘要。用户手动改过的单价不会被覆盖。
 
 > ⚠️ 厂商调价频繁，本表单价仅作折算基准，最终以各厂商官网实时价为准。Kimi 及个别条目为估算，请按实际账单校正。
-
-## 自定义域名
-
-GitHub Pages 项目站地址固定为 `账号名.github.io/仓库名`，账号名无法在 GitHub 内修改。想换成自己的域名（如 `app.example.com`），按下面三步：
-
-1. **注册域名**：在 Porkbun / Namecheap / 阿里云 / 腾讯云等注册一个自己能改 DNS 的域名。
-2. **加 DNS 解析**（在域名服务商后台）：
-   - 用**子域名**（推荐，如 `app.example.com`）：加一条 `CNAME` 记录，主机 `app`，值 `muxili686-code.github.io`（不含仓库名）。
-   - 用**根域名**（`example.com`）：加 4 条 `A` 记录，主机 `@`，值分别为 `185.199.108.153`、`185.199.109.153`、`185.199.110.153`、`185.199.111.153`。
-3. **GitHub 端**：仓库 Settings → Pages → Custom domain 填入域名 → Save → DNS 生效后勾选 **Enforce HTTPS**。
-
-> WorkBuddy 应用链接（`*.app.workbuddy.host`）是平台生成，不支持绑定自定义域名，也没有修改入口。要干净网址只能用上面的 GitHub Pages + 自定义域名方案。
 
 ## 技术栈
 
