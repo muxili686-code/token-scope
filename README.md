@@ -85,11 +85,6 @@ USD 计价的模型按汇率折算成人民币后汇总（默认 1USD=6.6793CNY�
 - 豆包/方舟：火山引擎官方定价页 [0,32K) 现金结算档
 - 官网未公开或本次未查到的条目（少数 Grok / Mistral / Inking / Muse 变体等）标 `estimated`，source 注明「请校正」，不伪装成精确价。
 
-### 自动更新
-已配置定时任务「TokenScope 每日模型价与汇率更新」，每天 08:35 联网核实上述官方价与实时汇率，自动修正/新增价格条目并重新构建，输出变更摘要。用户手动改过的单价不会被覆盖。
-
-> ⚠️ 厂商调价频繁，本表单价仅作折算基准，最终以各厂商官网实时价为准。Kimi 及个别条目为估算，请按实际账单校正。
-
 ## 技术栈
 
 Vite + React 19 + TypeScript(strict) + Tailwind CSS v4 + Recharts + Lucide Icons。响应式，mobile-first。
