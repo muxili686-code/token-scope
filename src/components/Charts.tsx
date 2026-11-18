@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
@@ -83,7 +83,10 @@ export function VendorPieChart({
   data: Array<{ name: string; value: number }>
   tokenData?: Array<{ name: string; value: number }>
 }) {
-  // 以费用榜为主序，合并 token 榜里额外出现的厂商；占比各自按本环总量计算
+  const [metric, setMetric] = useState<'cost' | 'token'>('cost')
+  const hasToken = !!(tokenData && tokenData.length)
+
+  // 合并两个维度的厂商；占比按当前所选维度的总量计算
   const names = [...new Set([...data.map(d => d.name), ...(tokenData || []).map(d => d.name)])]
   const totalCost = data.reduce((s, d) => s + d.value, 0) || 1
   const totalTok = (tokenData || []).reduce((s, d) => s + d.value, 0) || 1
@@ -91,27 +94,36 @@ export function VendorPieChart({
     const cost = data.find(d => d.name === name)?.value || 0
     const tok = tokenData?.find(d => d.name === name)?.value || 0
     return { name, cost, tok, costPct: cost / totalCost * 100, tokPct: tok / totalTok * 100, color: stableColor(name) }
-  }).sort((a, b) => b.cost - a.cost)
+  }).sort((a, b) => metric === 'cost' ? b.cost - a.cost : b.tok - a.tok)
+  const sliceRows = rows.filter(r => (metric === 'cost' ? r.cost : r.tok) > 0)
+
+  const isCost = metric === 'cost' || !hasToken
+  const pctOf = (r: typeof rows[number]) => (isCost ? r.costPct : r.tokPct)
 
   return (
     <div>
+      {/* 费用 / Token 维度切换（参考胶囊按钮样式） */}
+      {hasToken && (
+        <div className="flex justify-center mb-1">
+          <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden">
+            <button className={'px-3 py-1.5 text-xs font-semibold ' + (metric === 'cost' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600')}
+              onClick={() => setMetric('cost')}>费用占比</button>
+            <button className={'px-3 py-1.5 text-xs font-semibold ' + (metric === 'token' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600')}
+              onClick={() => setMetric('token')}>Token 占比</button>
+          </div>
+        </div>
+      )}
       <ResponsiveContainer width="100%" height={210}>
         <PieChart>
-          {tokenData && tokenData.length > 0 && (
-            <Pie data={rows} dataKey="tok" nameKey="name" cx="50%" cy="50%" innerRadius={44} outerRadius={62} paddingAngle={2} stroke="none" isAnimationActive={false}>
-              {rows.map(r => <Cell key={'t' + r.name} fill={r.color} fillOpacity={0.45} />)}
-            </Pie>
-          )}
-          <Pie data={rows} dataKey="cost" nameKey="name" cx="50%" cy="50%"
-            innerRadius={tokenData && tokenData.length ? 68 : 52} outerRadius={tokenData && tokenData.length ? 90 : 82}
-            paddingAngle={2} stroke="none" isAnimationActive={false}>
-            {rows.map(r => <Cell key={'c' + r.name} fill={r.color} />)}
+          <Pie data={sliceRows} dataKey={isCost ? 'cost' : 'tok'} nameKey="name" cx="50%" cy="50%"
+            innerRadius={52} outerRadius={82} paddingAngle={2} stroke="none" isAnimationActive={false}>
+            {sliceRows.map(r => <Cell key={r.name} fill={r.color} />)}
           </Pie>
           <Tooltip contentStyle={tooltipStyle}
             formatter={(v: any, _n: any, item: any) => {
               const name = item?.payload?.name || ''
               const row = rows.find(r => r.name === name)
-              if (row && tokenData?.length) {
+              if (row && hasToken) {
                 return [`费用 ¥${row.cost.toFixed(2)}（${row.costPct.toFixed(1)}%） · Token ${fmtCompact(row.tok)}（${row.tokPct.toFixed(1)}%）`, name]
               }
               return ['¥' + Number(v).toFixed(2), name]
@@ -120,16 +132,16 @@ export function VendorPieChart({
       </ResponsiveContainer>
       <div className="flex flex-wrap gap-x-3 gap-y-1 justify-center mt-1">
         {rows.map(r => (
-          <div key={r.name} className="flex items-center gap-1.5 text-[11px] text-slate-600" title={`${r.name}：费用 ${r.costPct.toFixed(1)}% · Token ${r.tokPct.toFixed(1)}%`}>
-            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: r.color }} />
+          <div key={r.name} className="flex items-center gap-1.5 text-[11px] text-slate-600"
+            title={`${r.name}：费用 ${r.costPct.toFixed(1)}% · Token ${r.tokPct.toFixed(1)}%`}>
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: r.color, opacity: pctOf(r) > 0 ? 1 : 0.35 }} />
             <span>{r.name}</span>
-            <span className="font-semibold text-slate-800">{r.costPct.toFixed(0)}%</span>
-            {tokenData && tokenData.length > 0 && <span className="text-slate-400">/ {r.tokPct.toFixed(0)}%</span>}
+            <span className="font-semibold text-slate-800">{pctOf(r).toFixed(0)}%</span>
           </div>
         ))}
       </div>
       <div className="text-center text-[10px] faint mt-1.5">
-        {tokenData && tokenData.length ? '外环 费用占比 · 内环（浅）Token 占比 · 数字为 费用% / Token%' : '环图 费用占比'}
+        {isCost ? '按费用占比统计 · 数字为费用百分比' : '按 Token 占比统计 · 数字为 Token 百分比'}
       </div>
     </div>
   )
