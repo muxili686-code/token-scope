@@ -422,3 +422,45 @@ export function SessionTable({ records, costOf }: { records: UsageRecord[]; cost
     </div>
   )
 }
+
+// ============ 上下文构成分解 ============
+export function ContextBreakdown({ records }: { records: UsageRecord[] }) {
+  const data = useMemo(() => {
+    const input = records.reduce((s, r) => s + r.input, 0)
+    const cacheRead = records.reduce((s, r) => s + r.cacheRead, 0)
+    const cacheWrite = records.reduce((s, r) => s + r.cacheWrite, 0)
+    const output = records.reduce((s, r) => s + r.output, 0)
+    const reasoning = records.reduce((s, r) => s + r.reasoning, 0)
+    const total = input + cacheRead + cacheWrite + output + reasoning || 1
+    const parts = [
+      { name: '缓存命中', v: cacheRead, color: '#0ea5e9' },
+      { name: '非缓存输入', v: input, color: '#4f46e5' },
+      { name: '缓存写入', v: cacheWrite, color: '#16a34a' },
+      { name: '输出', v: output, color: '#e0524d' },
+      { name: '推理', v: reasoning, color: '#9333ea' },
+    ].filter(p => p.v > 0).map(p => ({ ...p, pct: p.v / total * 100 }))
+    const maxReq = Math.max(0, ...records.map(r => r.input + r.output + r.cacheRead + r.cacheWrite + r.reasoning))
+    return { parts, total, maxReq }
+  }, [records])
+  if (!data.parts.length) return <div className="text-center text-xs faint py-8">暂无数据</div>
+  return (
+    <div>
+      <div className="flex h-4 rounded-full overflow-hidden mb-3" title="各类 Token 构成">
+        {data.parts.map(p => <div key={p.name} style={{ width: `${p.pct}%`, background: p.color }} title={`${p.name} ${p.pct.toFixed(1)}%`} />)}
+      </div>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+        {data.parts.map(p => (
+          <div key={p.name} className="flex items-center gap-2 text-[11px]">
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: p.color }} />
+            <span className="text-slate-600 flex-1 truncate">{p.name}</span>
+            <span className="text-[10px] faint">{fmtCompact(p.v)}</span>
+            <span className="font-semibold kpi-num w-10 text-right">{p.pct.toFixed(1)}%</span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 pt-2 border-t border-slate-100 text-[10px] faint">
+        单次最大请求 {fmtCompact(data.maxReq)} tok · 累计 {fmtCompact(data.total)} tok
+      </div>
+    </div>
+  )
+}
