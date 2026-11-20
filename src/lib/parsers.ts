@@ -176,6 +176,12 @@ export function parseJSONLLine(line: string): UsageRecord | null {
     o?.sessionId || o?.session_id || o?.conversationId || o?.conversation_id
     || d.session_id || d.sessionId || ''
   )
+  // 工具/命令名：function_call 行顶层 name；兼容 tool_use 结构
+  const tool = String(
+    o?.name || o?.tool || o?.tool_name || o?.function?.name
+    || o?.message?.content?.find?.((c: any) => c?.type === 'tool_use')?.name
+    || d?.name || ''
+  ) || undefined
 
   return {
     id: uid(),
@@ -185,6 +191,7 @@ export function parseJSONLLine(line: string): UsageRecord | null {
     ts,
     tag: o?.workspace || o?.project || o?.cwd || undefined,
     session: session || undefined,
+    tool,
     source: 'log' as DataSource,
   }
 }
