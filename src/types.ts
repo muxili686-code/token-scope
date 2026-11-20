@@ -23,6 +23,8 @@ export interface UsageRecord {
   session?: string
   /** 会话中文标题（导入时从首条提问本地识别） */
   sessionTitle?: string
+  /** 工具/命令名（function_call 行的 name，如 Bash/Edit/Read） */
+  tool?: string
   /** 数据来源 */
   source: DataSource
 }
