@@ -354,3 +354,71 @@ export function RequestSizeDistribution({ records }: { records: UsageRecord[] })
     </div>
   )
 }
+
+// ============ 会话明细表 ============
+export function SessionTable({ records, costOf }: { records: UsageRecord[]; costOf: (r: UsageRecord) => number }) {
+  const [q, setQ] = useState('')
+  const [sortBy, setSortBy] = useState<'tokens' | 'cost' | 'recent'>('tokens')
+  const [expanded, setExpanded] = useState(false)
+
+  const rows = useMemo(() => {
+    const map = new Map<string, { id: string; title?: string; tokens: number; cost: number; req: number; last: number; models: Set<string> }>()
+    for (const r of records) {
+      const key = r.session || '(未标记会话)'
+      const cur = map.get(key) || { id: key, title: r.sessionTitle, tokens: 0, cost: 0, req: 0, last: 0, models: new Set<string>() }
+      cur.tokens += r.input + r.output + r.cacheRead + r.cacheWrite + r.reasoning
+      cur.cost += Math.max(0, costOf(r))
+      cur.req++
+      cur.last = Math.max(cur.last, r.ts)
+      if (!cur.title && r.sessionTitle) cur.title = r.sessionTitle
+      cur.models.add(r.model)
+      map.set(key, cur)
+    }
+    return [...map.values()]
+      .map(r => ({ ...r, modelCount: r.models.size }))
+      .filter(r => (r.title || '').includes(q) || r.id.includes(q))
+      .sort((a, b) => sortBy === 'tokens' ? b.tokens - a.tokens : sortBy === 'cost' ? b.cost - a.cost : b.last - a.last)
+  }, [records, costOf, q, sortBy])
+
+  const shown = expanded ? rows : rows.slice(0, 8)
+  if (!rows.length) return <div className="text-center text-xs faint py-8">暂无会话数据</div>
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-2 mb-2">
+        <div className="relative">
+          <Search size={13} className="absolute left-2.5 top-2 text-slate-400" />
+          <input className="input !w-48 !pl-7 !py-1.5 !text-xs" placeholder="搜索会话标题/ID…" value={q} onChange={e => setQ(e.target.value)} />
+        </div>
+        <button className="btn btn-sm flex items-center gap-1" onClick={() => setSortBy(sortBy === 'tokens' ? 'cost' : sortBy === 'cost' ? 'recent' : 'tokens')}>
+          按{sortBy === 'tokens' ? 'Token' : sortBy === 'cost' ? '费用' : '最近'} <ChevronDown size={12} />
+        </button>
+        <span className="text-[11px] faint ml-auto">共 {rows.length} 个会话</span>
+      </div>
+      <table className="dt w-full">
+        <thead><tr><th className="text-left">会话</th><th>请求</th><th>模型</th><th>Token</th><th>费用</th></tr></thead>
+        <tbody>
+          {shown.map(r => (
+            <tr key={r.id}>
+              <td className="text-left">
+                <div className="font-semibold text-xs truncate max-w-[220px]" title={r.title ? `${r.title} · ${r.id}` : r.id}>
+                  {r.title || r.id.slice(0, 8)}
+                </div>
+                <div className="text-[10px] faint mono">{r.id.slice(0, 8)}</div>
+              </td>
+              <td className="kpi-num">{fmtInt(r.req)}</td>
+              <td className="kpi-num">{r.modelCount}</td>
+              <td className="kpi-num font-semibold">{fmtCompact(r.tokens)}</td>
+              <td className="kpi-num">¥{r.cost.toFixed(2)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {rows.length > 8 && (
+        <button className="w-full mt-2 py-1.5 rounded-lg text-[11px] font-semibold text-indigo-600 hover:bg-indigo-50 flex items-center justify-center gap-1"
+          onClick={() => setExpanded(v => !v)}>
+          {expanded ? <>收起 <ChevronUp size={13} /></> : <>展开全部 {rows.length} 个会话 <ChevronDown size={13} /></>}
+        </button>
+      )}
+    </div>
+  )
+}
