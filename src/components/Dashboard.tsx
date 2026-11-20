@@ -6,8 +6,8 @@ import { exportAggsCSV, exportRecordsCSV, exportReportPNG } from '../lib/export'
 import type { UsageRecord, ModelAgg } from '../types'
 import type { ImportBatch } from '../lib/storage'
 import { fmtInt, fmtCompact, fmtMoney, fmtDateTime } from '../lib/format'
-import { DailyCostChart, VendorPieChart, DailyTokenStack, TokenComposition, CostTreemap, ToolRanking } from './Charts'
-import { WorkspaceDistribution, DailyHeatmap, RequestSizeDistribution, SessionTable } from './AnalysisPanels'
+import { DailyCostChart, VendorPieChart, DailyTokenStack, TokenComposition, CostTreemap, ToolRanking, CommandRanking, TimeDistribution, AnnualHeatmap } from './Charts'
+import { WorkspaceDistribution, DailyHeatmap, RequestSizeDistribution, SessionTable, ContextBreakdown } from './AnalysisPanels'
 
 interface Props {
   records: UsageRecord[]
@@ -230,6 +230,15 @@ export default function Dashboard({ records, aggs, batches, selectedIds, onSelec
         <Kpi icon={<Activity size={18} />} accent="#f59e0b" label="工具调用" value={fmtInt(filtered.filter(r => r.tool).length)} sub="次工具/命令调用" />
       </div>
 
+      {/* 年度活跃热力 */}
+      <div className="card card-pad">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-bold text-sm">活跃热力图</h3>
+          <span className="tag">近 26 周 · 每日 Token</span>
+        </div>
+        <AnnualHeatmap records={filtered} />
+      </div>
+
       {/* 活跃分布 + 日分布 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <WorkspaceDistribution records={filtered} />
@@ -275,6 +284,36 @@ export default function Dashboard({ records, aggs, batches, selectedIds, onSelec
         <div className="card card-pad">
           <h3 className="font-bold text-sm mb-2">会话明细</h3>
           <SessionTable records={filtered} costOf={scoped.costOf} />
+        </div>
+      </div>
+
+      {/* 耗时分布 + 上下文构成 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div className="card card-pad">
+          <h3 className="font-bold text-sm mb-2">耗时分布</h3>
+          <TimeDistribution records={filtered} />
+        </div>
+        <div className="card card-pad">
+          <h3 className="font-bold text-sm mb-2">上下文构成</h3>
+          <ContextBreakdown records={filtered} />
+        </div>
+      </div>
+
+      {/* 命令执行排行 + 工具调用排行（双维度） */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div className="card card-pad">
+          <h3 className="font-bold text-sm mb-2">命令执行排行</h3>
+          <CommandRanking records={filtered} />
+        </div>
+        <div className="card card-pad">
+          <h3 className="font-bold text-sm mb-2">单次最大请求</h3>
+          <div className="flex items-baseline gap-2 py-4">
+            <span className="font-bold kpi-num" style={{ fontSize: 30 }}>
+              {fmtCompact(Math.max(0, ...filtered.map(r => r.input + r.output + r.cacheRead + r.cacheWrite + r.reasoning)))}
+            </span>
+            <span className="text-xs faint">tokens</span>
+          </div>
+          <p className="text-[10px] faint">单次请求消耗的最大 token 数，用于评估上下文压力与单次成本上限。</p>
         </div>
       </div>
 
