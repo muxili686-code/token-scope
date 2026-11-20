@@ -293,3 +293,149 @@ export function ToolRanking({ records, costOf }: { records: UsageRecord[]; costO
     </div>
   )
 }
+
+/** 命令执行排行：Bash 命令首词 */
+export function CommandRanking({ records }: { records: UsageRecord[] }) {
+  const rows = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const r of records) if (r.command) map.set(r.command, (map.get(r.command) || 0) + 1)
+    return [...map.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 10)
+  }, [records])
+  const max = rows[0]?.count || 1
+  const total = rows.reduce((s, r) => s + r.count, 0)
+  if (!rows.length) return <div className="text-center text-xs faint py-8">日志中未识别到命令调用</div>
+  return (
+    <div>
+      <div className="text-[11px] faint mb-2">{fmtInt(total)} 次执行 · {rows.length} 个命令</div>
+      <div className="space-y-1.5">
+        {rows.map(r => (
+          <div key={r.name} className="flex items-center gap-2">
+            <span className="w-[76px] truncate text-[11px] text-slate-600 shrink-0 mono" title={r.name}>{r.name}</span>
+            <div className="flex-1 h-4 bg-slate-100 rounded overflow-hidden">
+              <div className="h-full rounded" style={{ width: `${Math.max(3, r.count / max * 100)}%`, background: stableColor('cmd:' + r.name) }} />
+            </div>
+            <span className="w-9 text-right text-[11px] font-semibold kpi-num shrink-0">×{r.count}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** 耗时分布（近似）：用相邻请求的时间间隔近似各阶段耗时，配彩色时间线 */
+export function TimeDistribution({ records }: { records: UsageRecord[] }) {
+  const data = useMemo(() => {
+    const sorted = [...records].filter(r => r.ts > 0).sort((a, b) => a.ts - b.ts)
+    if (sorted.length < 2) return null
+    const totalMs = sorted[sorted.length - 1].ts - sorted[0].ts
+    if (totalMs <= 0) return null
+    // 按工具名归类间隔：两条记录之间的间隔归给前一条记录的工具/阶段
+    const buckets: Record<string, number> = {}
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const gap = Math.max(0, Math.min(sorted[i + 1].ts - sorted[i].ts, totalMs * 0.1)) // 截断异常大间隔
+      const stage = sorted[i].tool ? '工具执行' : sorted[i].model ? '模型等待' : '其他'
+      buckets[stage] = (buckets[stage] || 0) + gap
+    }
+    const colors: Record<string, string> = { '工具执行': '#16a34a', '模型等待': '#4f46e5', '其他': '#94a3b8' }
+    const rows = Object.entries(buckets).map(([name, ms]) => ({ name, ms, pct: 0, color: colors[name] || '#f59e0b' }))
+    const sum = rows.reduce((s, r) => s + r.ms, 0) || 1
+    rows.forEach(r => { r.pct = r.ms / sum * 100 })
+    return { rows, totalMs, fmtTotal: totalMs >= 3600000 ? (totalMs / 3600000).toFixed(1) + 'h' : totalMs >= 60000 ? (totalMs / 60000).toFixed(1) + 'm' : (totalMs / 1000).toFixed(0) + 's' }
+  }, [records])
+  if (!data) return <div className="text-center text-xs faint py-8">日志时间信息不足</div>
+  const segments = ['#4f46e5', '#16a34a', '#94a3b8', '#f59e0b', '#0ea5e9', '#e0524d', '#9333ea', '#14b8a6']
+  return (
+    <div>
+      <div className="flex items-center gap-4 flex-wrap">
+        <div className="relative shrink-0" style={{ width: 130, height: 130 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie data={data.rows} dataKey="ms" nameKey="name" cx="50%" cy="50%" innerRadius={42} outerRadius={60} paddingAngle={2} stroke="none" isAnimationActive={false}>
+                {data.rows.map(r => <Cell key={r.name} fill={r.color} />)}
+              </Pie>
+              <Tooltip contentStyle={tooltipStyle} formatter={(v: any, n: any) => [(Number(v) / 60000).toFixed(1) + ' 分钟', n]} />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <span className="font-bold kpi-num" style={{ fontSize: 16 }}>{data.fmtTotal}</span>
+            <span className="text-[10px] faint">活跃时长</span>
+          </div>
+        </div>
+        <div className="flex-1 min-w-[130px] space-y-1.5">
+          {data.rows.map(r => (
+            <div key={r.name} className="flex items-center gap-2 text-[11px]">
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: r.color }} />
+              <span className="text-slate-600 flex-1">{r.name}</span>
+              <span className="font-semibold kpi-num">{(r.ms / 60000).toFixed(1)}m</span>
+              <span className="text-slate-400 w-10 text-right">{r.pct.toFixed(0)}%</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="flex h-3 rounded overflow-hidden mt-3 gap-[1px]">
+        {segments.flatMap((c, i) => {
+          const r = data.rows[i]
+          return r ? [<div key={i} style={{ width: `${r.pct}%`, background: c }} title={`${r.name} ${r.pct.toFixed(0)}%`} />] : []
+        })}
+      </div>
+      <div className="text-[10px] faint mt-1.5 text-center">按请求间隔近似估算各阶段耗时，仅供分布参考</div>
+    </div>
+  )
+}
+
+/** 年度热力日历：按日期聚合 Token，GitHub 风格格子 */
+export function AnnualHeatmap({ records }: { records: UsageRecord[] }) {
+  const { weeks, max } = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const r of records) {
+      if (!r.ts) continue
+      const d = new Date(r.ts)
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      map.set(key, (map.get(key) || 0) + r.input + r.output + r.cacheRead + r.cacheWrite + r.reasoning)
+    }
+    const max = Math.max(1, ...map.values())
+    // 最近 26 周（约半年），按周列、周一到周日行
+    const end = new Date(); end.setHours(0, 0, 0, 0)
+    const start = new Date(end); start.setDate(start.getDate() - 26 * 7)
+    start.setDate(start.getDate() - start.getDay()) // 对齐到周日
+    const weeks: Array<Array<{ key: string; v: number; date: Date }>> = []
+    const cur = new Date(start)
+    while (cur <= end) {
+      const week: Array<{ key: string; v: number; date: Date }> = []
+      for (let d = 0; d < 7; d++) {
+        const key = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`
+        week.push({ key, v: map.get(key) || 0, date: new Date(cur) })
+        cur.setDate(cur.getDate() + 1)
+      }
+      weeks.push(week)
+    }
+    return { weeks, max }
+  }, [records])
+  const shade = (v: number) => {
+    if (!v) return '#f1f5f9'
+    const t = Math.min(1, Math.sqrt(v / max))
+    const stops = [[224, 242, 254], [165, 213, 252], [96, 165, 250], [37, 99, 235], [29, 78, 216]]
+    const pos = t * (stops.length - 1), a = Math.floor(pos), b = Math.min(stops.length - 1, a + 1), f = pos - a
+    const c = stops[a].map((x, i) => Math.round(x + (stops[b][i] - x) * f))
+    return `rgb(${c[0]},${c[1]},${c[2]})`
+  }
+  return (
+    <div>
+      <div className="flex gap-[3px] overflow-x-auto pb-1">
+        {weeks.map((week, wi) => (
+          <div key={wi} className="flex flex-col gap-[3px]">
+            {week.map((cell, di) => (
+              <div key={di} className="w-[11px] h-[11px] rounded-[2px]" style={{ background: shade(cell.v) }}
+                title={`${cell.key} · ${cell.v ? fmtCompact(cell.v) + ' tok' : '无数据'}`} />
+            ))}
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center justify-end gap-1 mt-2 text-[10px] faint">
+        <span>少</span>
+        {[0, 0.25, 0.5, 0.75, 1].map((t, i) => <span key={i} className="w-[11px] h-[11px] rounded-[2px]" style={{ background: shade(t * t * max) }} />)}
+        <span>多</span>
+      </div>
+    </div>
+  )
+}
