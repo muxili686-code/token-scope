@@ -4,8 +4,9 @@
  * 用量行与用户提问行带同一个 sessionId，据此把标题关联到用量记录。
  */
 
-/** 宽松匹配 user 消息行，避免每行都 JSON.parse */
+/** 宽松匹配 user 消息行 / 官方标题行，避免每行都 JSON.parse */
 const USER_LINE = /"role"\s*:\s*"user"/
+const AI_TITLE_LINE = /"type"\s*:\s*"ai-title"/
 
 /** 把一条原始提问清洗成短标题 */
 function cleanTitle(raw: string): string {
@@ -42,14 +43,26 @@ const NOISE = /^(请继续|继续|继续执行|请继续执行任务|好的|嗯+
  * 每个会话只认第一条有效提问。
  */
 export function extractSessionTitles(text: string): Record<string, string> {
-  const titles: Record<string, string> = {}
-  for (const line of text.split(/\r?\n/)) {
-    if (!line.trim() || !USER_LINE.test(line)) continue
+  const lines = text.split(/\r?\n/)
+  const official: Record<string, string> = {}   // 官方 ai-title（最准）
+  const fallback: Record<string, string> = {}   // 首条提问兜底
+
+  for (const line of lines) {
+    if (!line.trim()) continue
+    // 官方标题行：优先级最高
+    if (AI_TITLE_LINE.test(line)) {
+      let o: any
+      try { o = JSON.parse(line) } catch { continue }
+      const sid = String(o.sessionId || o.session_id || '')
+      if (sid && o.aiTitle && !official[sid]) official[sid] = String(o.aiTitle).trim()
+      continue
+    }
+    if (!USER_LINE.test(line)) continue
     let o: any
     try { o = JSON.parse(line) } catch { continue }
     if (o?.role !== 'user') continue
     const sid = String(o.sessionId || o.session_id || o.conversationId || o.conversation_id || '')
-    if (!sid || titles[sid]) continue
+    if (!sid || official[sid] || fallback[sid]) continue
     const content = Array.isArray(o.content) ? o.content : []
     const textParts = content.map((c: any) => (typeof c?.text === 'string' ? c.text : '')).join('\n')
     if (!textParts) continue
@@ -57,9 +70,10 @@ export function extractSessionTitles(text: string): Record<string, string> {
     const q = (m ? m[1] : textParts).trim()
     const title = cleanTitle(q)
     if (!title || NOISE.test(title)) continue
-    titles[sid] = title
+    fallback[sid] = title
   }
-  return titles
+  // 官方标题缺失的会话，用首句提问补齐
+  return { ...fallback, ...official }
 }
 
 /** 把识别到的标题挂到用量记录上（只写有会话号的记录） */
