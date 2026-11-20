@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react'
 import {
-  Coins, Zap, Layers3, Percent, Info, RefreshCw, FolderOpen, CalendarRange, Download, FileSpreadsheet, Image as ImageIcon, Database, ChevronDown, Check,
+  Coins, Zap, Layers3, Percent, Info, RefreshCw, FolderOpen, CalendarRange, Download, FileSpreadsheet, Image as ImageIcon, Database, ChevronDown, Check, MessageSquare, Activity,
 } from 'lucide-react'
 import { exportAggsCSV, exportRecordsCSV, exportReportPNG } from '../lib/export'
 import type { UsageRecord, ModelAgg } from '../types'
 import type { ImportBatch } from '../lib/storage'
 import { fmtInt, fmtCompact, fmtMoney, fmtDateTime } from '../lib/format'
-import { DailyCostChart, VendorPieChart, DailyTokenStack } from './Charts'
-import { WorkspaceDistribution, DailyHeatmap, RequestSizeDistribution } from './AnalysisPanels'
+import { DailyCostChart, VendorPieChart, DailyTokenStack, TokenComposition, CostTreemap, ToolRanking } from './Charts'
+import { WorkspaceDistribution, DailyHeatmap, RequestSizeDistribution, SessionTable } from './AnalysisPanels'
 
 interface Props {
   records: UsageRecord[]
@@ -221,11 +221,13 @@ export default function Dashboard({ records, aggs, batches, selectedIds, onSelec
       </div>
 
       {/* KPI */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <Kpi icon={<Coins size={18} />} accent="#4f46e5" label="总费用" value={fmtMoney(stats.totalCost)} sub="按官方单价计算" />
         <Kpi icon={<Zap size={18} />} accent="#e0524d" label="总 Token" value={fmtCompact(stats.totalTokens)} sub={`${fmtInt(stats.totalTokens)} 枚`} />
         <Kpi icon={<Layers3 size={18} />} accent="#0ea5e9" label="请求 / 模型" value={`${fmtInt(filtered.length)} / ${scopedAggs.length}`} sub="条记录 / 个模型" />
         <Kpi icon={<Percent size={18} />} accent="#16a34a" label="缓存命中率" value={`${(stats.hitRate * 100).toFixed(1)}%`} sub={`命中 ${fmtCompact(stats.cacheHit)} tok`} />
+        <Kpi icon={<MessageSquare size={18} />} accent="#8b5cf6" label="会话" value={fmtInt(new Set(filtered.filter(r => r.session).map(r => r.session)).size || (filtered.length ? 1 : 0))} sub="个独立会话" />
+        <Kpi icon={<Activity size={18} />} accent="#f59e0b" label="工具调用" value={fmtInt(filtered.filter(r => r.tool).length)} sub="次工具/命令调用" />
       </div>
 
       {/* 活跃分布 + 日分布 */}
@@ -249,6 +251,30 @@ export default function Dashboard({ records, aggs, batches, selectedIds, onSelec
         <div className="card card-pad">
           <h3 className="font-bold text-sm mb-2">厂商费用 / Token 占比</h3>
           <VendorPieChart data={vendorCost} tokenData={vendorTokens} />
+        </div>
+      </div>
+
+      {/* Token 构成 + 费用构成 Treemap */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div className="card card-pad">
+          <h3 className="font-bold text-sm mb-3">Token 构成</h3>
+          <TokenComposition records={filtered} />
+        </div>
+        <div className="card card-pad">
+          <h3 className="font-bold text-sm mb-2">费用构成</h3>
+          <CostTreemap records={filtered} costOf={scoped.costOf} />
+        </div>
+      </div>
+
+      {/* 工具调用排行 + 会话明细 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div className="card card-pad">
+          <h3 className="font-bold text-sm mb-2">工具 / 命令调用</h3>
+          <ToolRanking records={filtered} costOf={scoped.costOf} />
+        </div>
+        <div className="card card-pad">
+          <h3 className="font-bold text-sm mb-2">会话明细</h3>
+          <SessionTable records={filtered} costOf={scoped.costOf} />
         </div>
       </div>
 
