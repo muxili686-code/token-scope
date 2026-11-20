@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
+  Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Treemap,
 } from 'recharts'
 import type { UsageRecord } from '../types'
-import { fmtDate, fmtCompact } from '../lib/format'
+import { fmtDate, fmtCompact, fmtInt } from '../lib/format'
 
 const COLORS = ['#4f46e5', '#e0524d', '#0ea5e9', '#16a34a', '#f59e0b', '#9333ea', '#14b8a6', '#ec4899', '#6366f1', '#84cc16']
 
@@ -160,5 +160,136 @@ export function DailyTokenStack({ records }: { records: UsageRecord[] }) {
         {vendors.map(v => <Bar key={v} dataKey={v} stackId="a" fill={stableColor(v)} />)}
       </BarChart>
     </ResponsiveContainer>
+  )
+}
+
+/** Token 构成：输入/输出/缓存命中/缓存写入/推理 占比环形图 + 图例 */
+export function TokenComposition({ records }: { records: UsageRecord[] }) {
+  const parts = useMemo(() => {
+    const sum = (k: keyof UsageRecord) => records.reduce((s, r) => s + (Number(r[k]) || 0), 0)
+    const rows = [
+      { name: '输入', value: sum('input'), color: '#4f46e5' },
+      { name: '输出', value: records.reduce((s, r) => s + r.output + r.reasoning, 0), color: '#e0524d' },
+      { name: '缓存命中', value: sum('cacheRead'), color: '#0ea5e9' },
+      { name: '缓存写入', value: sum('cacheWrite'), color: '#16a34a' },
+    ].filter(r => r.value > 0)
+    const total = rows.reduce((s, r) => s + r.value, 0) || 1
+    return rows.map(r => ({ ...r, pct: r.value / total * 100 }))
+  }, [records])
+  const total = parts.reduce((s, r) => s + r.value, 0)
+  if (!total) return <div className="text-center text-xs faint py-8">暂无 Token 数据</div>
+  return (
+    <div>
+      <div className="flex items-center gap-4 flex-wrap">
+        <div className="relative shrink-0" style={{ width: 150, height: 150 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie data={parts} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={48} outerRadius={70} paddingAngle={2} stroke="none" isAnimationActive={false}>
+                {parts.map(r => <Cell key={r.name} fill={r.color} />)}
+              </Pie>
+              <Tooltip contentStyle={tooltipStyle} formatter={(v: any, n: any) => [fmtCompact(Number(v)) + ' tok', n]} />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <span className="font-bold kpi-num" style={{ fontSize: 18 }}>{fmtCompact(total)}</span>
+            <span className="text-[10px] faint">总 Token</span>
+          </div>
+        </div>
+        <div className="flex-1 min-w-[140px] space-y-1.5">
+          {parts.map(r => (
+            <div key={r.name} className="flex items-center gap-2 text-[11px]">
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: r.color }} />
+              <span className="text-slate-600 flex-1">{r.name}</span>
+              <span className="font-semibold kpi-num">{r.pct.toFixed(1)}%</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** 费用构成 Treemap：按模型切块，可切换按模型/按厂商 */
+export function CostTreemap({ records, costOf }: { records: UsageRecord[]; costOf: (r: UsageRecord) => number }) {
+  const [dim, setDim] = useState<'model' | 'vendor'>('model')
+  const data = useMemo(() => {
+    const map = new Map<string, { name: string; size: number }>()
+    for (const r of records) {
+      const key = dim === 'model' ? r.model : r.vendor
+      const c = Math.max(0, costOf(r))
+      map.set(key, { name: key, size: (map.get(key)?.size || 0) + c })
+    }
+    return [...map.values()].filter(d => d.size > 0).sort((a, b) => b.size - a.size)
+  }, [records, costOf, dim])
+  if (!data.length) return <div className="text-center text-xs faint py-8">暂无费用数据</div>
+  return (
+    <div>
+      <div className="flex justify-end mb-1">
+        <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden">
+          <button className={'px-2.5 py-1 text-[11px] font-semibold ' + (dim === 'model' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600')} onClick={() => setDim('model')}>按模型</button>
+          <button className={'px-2.5 py-1 text-[11px] font-semibold ' + (dim === 'vendor' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600')} onClick={() => setDim('vendor')}>按厂商</button>
+        </div>
+      </div>
+      <div style={{ width: '100%', height: 230 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <Treemap data={data} dataKey="size" nameKey="name" stroke="#fff"
+            content={(({ x, y, width, height, name, index }: any) => {
+              if (width < 24 || height < 18) return null
+              const color = stableColor(String(name))
+              const item = data[index]
+              return (
+                <g>
+                  <rect x={x} y={y} width={width} height={height} fill={color} fillOpacity={0.88} rx={4} />
+                  {width > 56 && height > 34 && (
+                    <>
+                      <text x={x + 7} y={y + 17} fill="#fff" fontSize={11} fontWeight={700} className="select-none">
+                        {String(name).length > 12 ? String(name).slice(0, 11) + '…' : name}
+                      </text>
+                      <text x={x + 7} y={y + 32} fill="#fff" fillOpacity={0.9} fontSize={10} className="select-none">
+                        ¥{item?.size?.toFixed(2)}
+                      </text>
+                    </>
+                  )}
+                </g>
+              )
+            }) as any} />
+        </ResponsiveContainer>
+      </div>
+    </div>
+  )
+}
+
+/** 工具调用排行：横向条形 + 次数/费用 */
+export function ToolRanking({ records, costOf }: { records: UsageRecord[]; costOf: (r: UsageRecord) => number }) {
+  const rows = useMemo(() => {
+    const map = new Map<string, { name: string; count: number; cost: number; tokens: number }>()
+    for (const r of records) {
+      if (!r.tool) continue
+      const cur = map.get(r.tool) || { name: r.tool, count: 0, cost: 0, tokens: 0 }
+      cur.count++
+      cur.cost += Math.max(0, costOf(r))
+      cur.tokens += r.input + r.output + r.cacheRead + r.cacheWrite + r.reasoning
+      map.set(r.tool, cur)
+    }
+    return [...map.values()].sort((a, b) => b.count - a.count).slice(0, 12)
+  }, [records, costOf])
+  const max = rows[0]?.count || 1
+  const totalCount = rows.reduce((s, r) => s + r.count, 0)
+  if (!rows.length) return <div className="text-center text-xs faint py-8">日志中未识别到工具调用</div>
+  return (
+    <div>
+      <div className="text-[11px] faint mb-2">{fmtInt(totalCount)} 次调用 · {rows.length} 个工具</div>
+      <div className="space-y-1.5">
+        {rows.map(r => (
+          <div key={r.name} className="flex items-center gap-2">
+            <span className="w-[92px] truncate text-[11px] text-slate-600 shrink-0" title={r.name}>{r.name}</span>
+            <div className="flex-1 h-4 bg-slate-100 rounded overflow-hidden">
+              <div className="h-full rounded" style={{ width: `${Math.max(3, r.count / max * 100)}%`, background: stableColor(r.name) }} />
+            </div>
+            <span className="w-10 text-right text-[11px] font-semibold kpi-num shrink-0">{fmtInt(r.count)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
