@@ -182,6 +182,17 @@ export function parseJSONLLine(line: string): UsageRecord | null {
     || o?.message?.content?.find?.((c: any) => c?.type === 'tool_use')?.name
     || d?.name || ''
   ) || undefined
+  // 命令首词：Bash 的 arguments.command 取首个单词，去掉路径前缀
+  let command: string | undefined
+  if (tool === 'Bash' && o?.arguments) {
+    try {
+      const a = typeof o.arguments === 'string' ? JSON.parse(o.arguments) : o.arguments
+      const cmd = String(a?.command || '').trim().split(/[\s\n&|;]+/)[0]
+      const base = cmd.split(/[\\/]/).pop() || ''
+      const clean = base.replace(/\.(exe|py|sh|bat)$/i, '')
+      if (clean) command = clean.toLowerCase()
+    } catch { /* 忽略解析失败的 arguments */ }
+  }
 
   return {
     id: uid(),
@@ -192,6 +203,7 @@ export function parseJSONLLine(line: string): UsageRecord | null {
     tag: o?.workspace || o?.project || o?.cwd || undefined,
     session: session || undefined,
     tool,
+    command,
     source: 'log' as DataSource,
   }
 }
