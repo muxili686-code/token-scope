@@ -25,6 +25,8 @@ export interface UsageRecord {
   sessionTitle?: string
   /** 工具/命令名（function_call 行的 name，如 Bash/Edit/Read） */
   tool?: string
+  /** 命令首词（Bash arguments.command 的首个命令，如 python3/ls/grep） */
+  command?: string
   /** 数据来源 */
   source: DataSource
 }
